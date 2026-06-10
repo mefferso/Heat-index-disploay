@@ -1,12 +1,23 @@
 const NDFD_URL = 'https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer';
-const DEFAULT_FORECAST_APT_IMAGE_LAYER = {0:49,3:53,6:57,9:61,12:65,15:69,18:73,21:77,24:81};
-let forecastAptImageLayer = {...DEFAULT_FORECAST_APT_IMAGE_LAYER};
+const DEFAULT_FORECAST_APT_LAYER = {
+  0:{display:46, identify:49},
+  3:{display:50, identify:53},
+  6:{display:54, identify:57},
+  9:{display:58, identify:61},
+  12:{display:62, identify:65},
+  15:{display:66, identify:69},
+  18:{display:70, identify:73},
+  21:{display:74, identify:77},
+  24:{display:78, identify:81}
+};
+let forecastAptLayer = {...DEFAULT_FORECAST_APT_LAYER};
 const CITIES = [
   ['Baton Rouge',30.4515,-91.1871],['New Orleans',29.9511,-90.0715],['Gulfport',30.3674,-89.0928],['McComb',31.2446,-90.4532],['Woodville',31.1046,-91.2990],['Hammond',30.5044,-90.4612],['Bogalusa',30.7910,-89.8487],['Houma',29.5958,-90.7195]
 ];
 let map, ndfdLayer, cityLayer, stateLayer, countyLayer, cwaHaloLayer, cwaLayer;
 let selectedHour = 0;
-let activeImageLayerId = forecastAptImageLayer[0];
+let activeDisplayLayerId = forecastAptLayer[0].display;
+let activeImageLayerId = forecastAptLayer[0].identify;
 let playTimer = null;
 
 const $ = id => document.getElementById(id);
@@ -33,7 +44,7 @@ function init(){
 
   ndfdLayer = L.esri.dynamicMapLayer({
     url:NDFD_URL,
-    layers:[activeImageLayerId],
+    layers:activeRasterLayers(),
     opacity:0.80,
     pane:'ndfd-raster-pane',
     format:'png32',
@@ -56,6 +67,10 @@ function init(){
   wireControls();
   syncForecast();
   map.on('click', e => inspectPoint(e.latlng));
+}
+
+function activeRasterLayers(){
+  return [activeDisplayLayerId, activeImageLayerId].filter(id => id != null);
 }
 
 function wireControls(){
@@ -84,7 +99,9 @@ function syncForecast(){
   const requestedHour = selectedHour;
   const step = nearestStep(requestedHour);
   const exactMatch = step === requestedHour;
-  activeImageLayerId = forecastAptImageLayer[step];
+  const activeLayer = forecastAptLayer[step];
+  activeDisplayLayerId = activeLayer?.display;
+  activeImageLayerId = activeLayer?.identify;
   $('offset-badge').textContent = forecastBadge(step, requestedHour, exactMatch);
   $('hours-display').textContent = forecastTitle(step, requestedHour, exactMatch);
   updateTickState(step, requestedHour);
@@ -98,20 +115,20 @@ function syncForecast(){
   $('utc-time').textContent = `${utc} UTC`;
   $('date-display').textContent = `${local} / ${utc} UTC`;
 
-  if(ndfdLayer && activeImageLayerId != null) {
+  if(ndfdLayer && activeDisplayLayerId != null && activeImageLayerId != null) {
     setLayerStatus('loading', `Loading NDFD apparent temperature layer (${forecastStatusLabel(step, requestedHour, exactMatch)})…`);
-    ndfdLayer.setLayers([activeImageLayerId]);
+    ndfdLayer.setLayers(activeRasterLayers());
     ndfdLayer.bringToFront();
   } else {
     setLayerStatus('error', 'No NDFD apparent temperature layer is available for this forecast hour.');
-    console.error('No NDFD apparent temperature layer id found for forecast hour:', {requestedHour, resolvedHour:step, forecastAptImageLayer});
+    console.error('No NDFD apparent temperature layer ids found for forecast hour:', {requestedHour, resolvedHour:step, forecastAptLayer});
   }
   bringOverlaysToFront();
   refreshCityValues();
 }
 
 function nearestStep(hour){
-  const availableHours = Object.keys(forecastAptImageLayer).map(Number);
+  const availableHours = Object.keys(forecastAptLayer).map(Number);
   return availableHours.reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, availableHours[0]);
 }
 function forecastLabel(step){
@@ -142,7 +159,7 @@ async function loadForecastLayers(){
     const metadata = await fetchJson(`${NDFD_URL}?f=pjson`);
     const discovered = discoverApparentTemperatureImageLayers(metadata.layers || []);
     if(Object.keys(discovered).length){
-      forecastAptImageLayer = discovered;
+      forecastAptLayer = discovered;
       syncForecast();
       return;
     }
@@ -150,25 +167,21 @@ async function loadForecastLayers(){
   }catch(err){
     console.warn('Could not load NDFD layer metadata; using fallback apparent temperature layer ids.', err);
   }
-  forecastAptImageLayer = {...DEFAULT_FORECAST_APT_IMAGE_LAYER};
+  forecastAptLayer = {...DEFAULT_FORECAST_APT_LAYER};
   syncForecast();
 }
 function discoverApparentTemperatureImageLayers(layers){
   const byId = new Map(layers.map(layer => [layer.id, layer]));
   return layers.reduce((acc, layer) => {
-    const directMatch = /^AptTemp_(\d{2})Hr\/Image$/i.exec(layer.name || '');
-    if(directMatch){
-      acc[Number(directMatch[1])] = layer.id;
-      return acc;
-    }
-
     const groupMatch = /^AptTemp_(\d{2})Hr$/i.exec(layer.name || '');
     if(!groupMatch) return acc;
 
     const imageChild = (layer.subLayerIds || [])
       .map(id => byId.get(id))
       .find(child => /^Image$/i.test(child?.name || ''));
-    if(imageChild) acc[Number(groupMatch[1])] = imageChild.id;
+    if(imageChild){
+      acc[Number(groupMatch[1])] = {display:layer.id, identify:imageChild.id};
+    }
     return acc;
   }, {});
 }
