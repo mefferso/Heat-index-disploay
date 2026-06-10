@@ -13,11 +13,18 @@ const $ = id => document.getElementById(id);
 const cityId = name => `city-val-${name.replace(/\s+/g,'-')}`;
 window.addEventListener('DOMContentLoaded', init);
 
+function createMapPane(name, zIndex){
+  map.createPane(name);
+  const pane = map.getPane(name);
+  pane.style.zIndex = zIndex;
+  pane.style.pointerEvents = 'none';
+}
+
 function init(){
   map = L.map('map', {center:[30.65,-90.25], zoom:7, zoomControl:false});
-  map.createPane('ndfd-raster-pane');
-  map.getPane('ndfd-raster-pane').style.zIndex = 350;
-  map.getPane('ndfd-raster-pane').style.pointerEvents = 'none';
+  createMapPane('ndfd-raster-pane', 350);
+  createMapPane('county-boundary-pane', 430);
+  createMapPane('cwa-boundary-pane', 460);
   setLayerStatus('loading', 'Loading NDFD apparent temperature layer…');
   L.control.zoom({position:'topleft'}).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -173,10 +180,26 @@ async function loadBoundaries(){
       fetchJson('assets/boundaries/lix_counties.geojson'),
       fetchJson('assets/boundaries/lix_cwa.geojson')
     ]);
-    stateLayer = L.geoJSON(states, {interactive:false, style:{color:'#ffffff',weight:1.2,opacity:.55,fillOpacity:0}}).addTo(map);
-    countyLayer = L.geoJSON(counties, {interactive:false, style:{color:'#111827',weight:1.15,opacity:.92,fillOpacity:0}}).addTo(map);
-    cwaHaloLayer = L.geoJSON(cwa, {interactive:false, style:{color:'#ffffff',weight:5,opacity:.95,fillOpacity:0}}).addTo(map);
-    cwaLayer = L.geoJSON(cwa, {interactive:false, style:{color:'#000000',weight:3,opacity:1,fillOpacity:0}}).addTo(map);
+    stateLayer = L.geoJSON(states, {
+      interactive:false,
+      pane:'county-boundary-pane',
+      style:{color:'#e2e8f0',weight:1.1,opacity:.38,dashArray:'6 5',fillOpacity:0}
+    }).addTo(map);
+    countyLayer = L.geoJSON(counties, {
+      interactive:false,
+      pane:'county-boundary-pane',
+      style:{color:'#f8fafc',weight:1,opacity:.58,fillOpacity:0}
+    }).addTo(map);
+    cwaHaloLayer = L.geoJSON(cwa, {
+      interactive:false,
+      pane:'cwa-boundary-pane',
+      style:{color:'#020617',weight:7,opacity:.82,fillOpacity:0,lineJoin:'round'}
+    }).addTo(map);
+    cwaLayer = L.geoJSON(cwa, {
+      interactive:false,
+      pane:'cwa-boundary-pane',
+      style:{color:'#fbbf24',weight:3,opacity:.96,fillOpacity:0,lineJoin:'round'}
+    }).addTo(map);
     bringOverlaysToFront();
   }catch(err){
     console.error(err);

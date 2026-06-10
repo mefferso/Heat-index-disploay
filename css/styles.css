@@ -286,6 +286,39 @@ footer{
   box-shadow:0 0 0 2px rgba(255,255,255,.12);
 }
 
+.boundary-key{
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid rgba(148,163,184,.18);
+  display:grid;
+  gap:8px;
+  color:#cbd5e1;
+  font-size:12px;
+}
+
+.boundary-key div{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.line-sample{
+  width:32px;
+  height:0;
+  border-top:3px solid currentColor;
+  border-radius:999px;
+}
+
+.cwa-line{
+  color:#fbbf24;
+  box-shadow:0 0 0 2px rgba(2,6,23,.75);
+}
+
+.county-line{
+  color:rgba(248,250,252,.72);
+  border-top-width:2px;
+}
+
 .purple{background:#9333ea}
 .red{background:#ef4444}
 .orange{background:#fb923c}
