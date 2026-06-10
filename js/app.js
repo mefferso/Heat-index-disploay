@@ -1,21 +1,23 @@
 const NDFD_URL = 'https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer';
-const FORECAST_GROUP_LAYER = {0:42,3:50,6:54,9:58,12:62,15:66,18:70,21:74,24:78};
+const FORECAST_APT_IMAGE_LAYER = {0:49,3:53,6:57,9:61,12:65,15:69,18:73,21:77,24:81};
 const CITIES = [
   ['Baton Rouge',30.4515,-91.1871],['New Orleans',29.9511,-90.0715],['Gulfport',30.3674,-89.0928],['McComb',31.2446,-90.4532],['Woodville',31.1046,-91.2990],['Hammond',30.5044,-90.4612],['Bogalusa',30.7910,-89.8487],['Houma',29.5958,-90.7195]
 ];
 let map, ndfdLayer, cityLayer, stateLayer, countyLayer, cwaHaloLayer, cwaLayer;
 let selectedHour = 0;
-let activeGroupId = FORECAST_GROUP_LAYER[0];
+let activeImageLayerId = FORECAST_APT_IMAGE_LAYER[0];
 let playTimer = null;
 
 const $ = id => document.getElementById(id);
 const cityId = name => `city-val-${name.replace(/\s+/g,'-')}`;
-const imageChild = groupId => groupId + 3;
-
 window.addEventListener('DOMContentLoaded', init);
 
 function init(){
   map = L.map('map', {center:[30.65,-90.25], zoom:7, zoomControl:false});
+  map.createPane('ndfd-raster-pane');
+  map.getPane('ndfd-raster-pane').style.zIndex = 350;
+  map.getPane('ndfd-raster-pane').style.pointerEvents = 'none';
+  setLayerStatus('loading', 'Loading NDFD apparent temperature layer…');
   L.control.zoom({position:'topleft'}).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution:'© OpenStreetMap contributors © CARTO, NOAA/NWS', maxZoom:19
@@ -23,11 +25,21 @@ function init(){
 
   ndfdLayer = L.esri.dynamicMapLayer({
     url:NDFD_URL,
-    layers:[activeGroupId, imageChild(activeGroupId)],
+    layers:[activeImageLayerId],
     opacity:0.80,
+    pane:'ndfd-raster-pane',
+    format:'png32',
+    transparent:true,
     useCors:false,
     disableCache:true
-  }).addTo(map);
+  })
+    .on('loading', () => setLayerStatus('loading', 'Loading NDFD apparent temperature layer…'))
+    .on('load', () => {
+      setLayerStatus('ready', `NDFD apparent temperature layer loaded (${forecastLabel(nearestStep(selectedHour))}).`);
+      bringOverlaysToFront();
+    })
+    .on('requesterror', handleNdfdLayerError)
+    .addTo(map);
 
   loadBoundaries();
   addCityLabels();
@@ -53,7 +65,7 @@ function wireControls(){
 
 function syncForecast(){
   const step = nearestStep(selectedHour);
-  activeGroupId = FORECAST_GROUP_LAYER[step];
+  activeImageLayerId = FORECAST_APT_IMAGE_LAYER[step];
   $('offset-badge').textContent = step === 0 ? 'Current' : `+${step}h`;
   $('hours-display').textContent = step === 0 ? 'Current Forecast' : `+${step} Hour Forecast`;
 
@@ -67,7 +79,8 @@ function syncForecast(){
   $('date-display').textContent = `${local} / ${utc} UTC`;
 
   if(ndfdLayer) {
-    ndfdLayer.setLayers([activeGroupId, imageChild(activeGroupId)]);
+    setLayerStatus('loading', `Loading NDFD apparent temperature layer (${forecastLabel(step)})…`);
+    ndfdLayer.setLayers([activeImageLayerId]);
     ndfdLayer.bringToFront();
   }
   bringOverlaysToFront();
@@ -75,15 +88,18 @@ function syncForecast(){
 }
 
 function nearestStep(hour){
-  return Object.keys(FORECAST_GROUP_LAYER).map(Number).reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, 0);
+  return Object.keys(FORECAST_APT_IMAGE_LAYER).map(Number).reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, 0);
+}
+function forecastLabel(step){
+  return step === 0 ? 'current forecast' : `+${step} hour forecast`;
 }
 
 async function loadBoundaries(){
   try{
     const [states,counties,cwa] = await Promise.all([
-      fetchGzJson('assets/boundaries/lix_states.geojson.gz'),
-      fetchGzJson('assets/boundaries/lix_counties.geojson.gz'),
-      fetchGzJson('assets/boundaries/lix_cwa.geojson.gz')
+      fetchJson('assets/boundaries/lix_states.geojson'),
+      fetchJson('assets/boundaries/lix_counties.geojson'),
+      fetchJson('assets/boundaries/lix_cwa.geojson')
     ]);
     stateLayer = L.geoJSON(states, {interactive:false, style:{color:'#ffffff',weight:1.2,opacity:.55,fillOpacity:0}}).addTo(map);
     countyLayer = L.geoJSON(counties, {interactive:false, style:{color:'#111827',weight:1.15,opacity:.92,fillOpacity:0}}).addTo(map);
@@ -95,19 +111,24 @@ async function loadBoundaries(){
     toast('Boundary files did not load. Check GitHub Pages asset paths.');
   }
 }
-async function fetchGzJson(url){
+async function fetchJson(url){
   const r = await fetch(url);
   if(!r.ok) throw new Error(`${url} ${r.status}`);
-  const buf = new Uint8Array(await r.arrayBuffer());
-  let txt;
-  try {
-    txt = new TextDecoder().decode(fflate.gunzipSync(buf));
-  } catch (err) {
-    // Some static hosts may auto-decompress .gz files. If that happens, parse the body directly.
-    txt = new TextDecoder().decode(buf);
-  }
-  return JSON.parse(txt);
+  return r.json();
 }
+
+function setLayerStatus(type, message){
+  const el = $('layer-status');
+  if(!el) return;
+  el.textContent = message;
+  el.className = `layer-status ${type}`;
+}
+function handleNdfdLayerError(err){
+  console.error('NDFD apparent temperature layer failed to load:', err);
+  setLayerStatus('error', 'NDFD apparent temperature layer failed to load. See console for details.');
+  toast('NDFD apparent temperature layer failed to load.');
+}
+
 function bringOverlaysToFront(){
   setTimeout(() => {
     [stateLayer, countyLayer, cwaHaloLayer, cwaLayer, cityLayer].forEach(layer => { if(layer?.bringToFront) layer.bringToFront(); });
@@ -129,7 +150,7 @@ function addCityLabels(){
 function refreshCityValues(){ if(cityLayer) addCityLabels(); }
 
 function sampleValue(name, lat, lng, callback){
-  L.esri.identifyFeatures({url:NDFD_URL}).on(map).at(L.latLng(lat,lng)).layers(`visible:${imageChild(activeGroupId)}`).tolerance(3).run((err, fc) => {
+  L.esri.identifyFeatures({url:NDFD_URL}).on(map).at(L.latLng(lat,lng)).layers(`visible:${activeImageLayerId}`).tolerance(3).run((err, fc) => {
     if(err || !fc?.features?.length) return callback(NaN);
     callback(extractValue(fc.features[0].properties || {}));
   });
@@ -153,7 +174,7 @@ function inspectPoint(latlng){
   $('inspect-value').textContent = '--';
   $('inspect-risk').textContent = 'Consulting NDFD database...';
   $('inspect-risk').className = 'risk neutral';
-  L.esri.identifyFeatures({url:NDFD_URL}).on(map).at(latlng).layers(`visible:${imageChild(activeGroupId)}`).tolerance(3).run((err, fc) => {
+  L.esri.identifyFeatures({url:NDFD_URL}).on(map).at(latlng).layers(`visible:${activeImageLayerId}`).tolerance(3).run((err, fc) => {
     if(err || !fc?.features?.length) return noInspectData();
     const val = extractValue(fc.features[0].properties || {});
     if(!Number.isFinite(val)) return noInspectData();
