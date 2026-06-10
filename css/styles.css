@@ -497,18 +497,6 @@ main{
 
 #opacity-readout{color:#fff}
 
-#reset-btn{
-  position:absolute;
-  top:20px;
-  right:20px;
-  z-index:500;
-  padding:12px 16px;
-  border:1px solid rgba(251,191,36,.55);
-  background:linear-gradient(180deg,#f59e0b,#b45309);
-  color:#111827;
-  text-transform:uppercase;
-  letter-spacing:.04em;
-}
 
 #toast{
   position:absolute;
@@ -533,12 +521,12 @@ main{
 .city-label-marker{pointer-events:none}
 
 .city-label{
-  padding:3px 6px;
+  padding:4px 7px;
   border:1px solid rgba(226,232,240,.34);
   border-radius:6px;
   background:rgba(30,41,59,.62);
   box-shadow:0 1px 3px rgba(2,6,23,.42);
-  line-height:1.05;
+  line-height:1.12;
   text-align:center;
   white-space:nowrap;
   backdrop-filter:blur(2px);
@@ -546,15 +534,15 @@ main{
 
 .city-name{
   color:#f8fafc;
-  font-size:10px;
-  font-weight:850;
+  font-size:12px;
+  font-weight:600;
   text-shadow:0 1px 1px rgba(2,6,23,.8);
 }
 
 .city-value{
   color:#fde68a;
-  font-size:12px;
-  font-weight:950;
+  font-size:14px;
+  font-weight:800;
   text-shadow:0 1px 1px rgba(2,6,23,.85);
 }
 
@@ -599,5 +587,4 @@ main{
   #sidebar{padding:12px}
   .row.between{align-items:flex-start;flex-direction:column}
   .opacity-control{display:block;width:100%}
-  #reset-btn{top:12px;right:12px;padding:10px 12px;font-size:12px}
 }

@@ -90,7 +90,6 @@ function wireControls(){
     if(ndfdLayer) ndfdLayer.setOpacity(Number(e.target.value)/100);
   });
   $('play-btn').addEventListener('click', togglePlayback);
-  $('reset-btn').addEventListener('click', () => map.setView([30.65,-90.25],7));
 }
 
 function setForecastHour(hour){
@@ -120,11 +119,10 @@ function syncForecast(){
   activeImageLayerId = activeLayer?.identify;
   const target = validTimeForHour(step);
   const local = formatValidTime(target);
-  $('offset-badge').textContent = compactValidTime(target);
+  $('offset-badge').textContent = 'Selected';
   $('hours-display').textContent = forecastTitle(step, requestedHour, exactMatch);
   updateTimeButtonState(step);
   $('local-time').textContent = local;
-  $('date-display').textContent = local;
 
   if(ndfdLayer && activeDisplayLayerId != null && activeImageLayerId != null) {
     setLayerStatus('loading', `Loading NDFD apparent temperature layer (${forecastStatusLabel(step, requestedHour, exactMatch)})…`);
@@ -146,7 +144,7 @@ function nearestStep(hour){
   return availableHours.reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, availableHours[0]);
 }
 function forecastTitle(step, requestedHour, exactMatch){
-  const label = compactValidTime(validTimeForHour(step));
+  const label = validDateLabel(validTimeForHour(step));
   return exactMatch ? `Valid ${label}` : `Nearest Available: ${label}`;
 }
 function forecastStatusLabel(step, requestedHour, exactMatch){
@@ -163,6 +161,15 @@ function validTimeForHour(hour){
 }
 function formatValidTime(date){
   return date.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+}
+function validDateLabel(date){
+  const weekday = date.toLocaleDateString(undefined,{weekday:'long'});
+  const month = date.toLocaleDateString(undefined,{month:'long'});
+  return `${weekday}, ${month} ${ordinal(date.getDate())}`;
+}
+function ordinal(day){
+  const suffix = [11,12,13].includes(day % 100) ? 'th' : ({1:'st',2:'nd',3:'rd'}[day % 10] || 'th');
+  return `${day}${suffix}`;
 }
 function compactValidTime(date){
   const day = dayLabel(date);
@@ -264,17 +271,17 @@ async function loadBoundaries(){
     countyLayer = L.geoJSON(counties, {
       interactive:false,
       pane:'county-boundary-pane',
-      style:{color:'#f8fafc',weight:1,opacity:.58,fillOpacity:0}
+      style:{color:'#f8fafc',weight:.8,opacity:.48,fillOpacity:0}
     }).addTo(map);
     cwaHaloLayer = L.geoJSON(cwa, {
       interactive:false,
       pane:'cwa-boundary-pane',
-      style:{color:'#020617',weight:7,opacity:.82,fillOpacity:0,lineJoin:'round'}
+      style:{color:'#ffffff',weight:5,opacity:.68,fillOpacity:0,lineJoin:'round'}
     }).addTo(map);
     cwaLayer = L.geoJSON(cwa, {
       interactive:false,
       pane:'cwa-boundary-pane',
-      style:{color:'#fbbf24',weight:3,opacity:.96,fillOpacity:0,lineJoin:'round'}
+      style:{color:'#050505',weight:2.6,opacity:.95,fillOpacity:0,lineJoin:'round'}
     }).addTo(map);
     bringOverlaysToFront();
   }catch(err){
