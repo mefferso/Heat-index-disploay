@@ -1,0 +1,192 @@
+const NDFD_URL = 'https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer';
+const FORECAST_GROUP_LAYER = {0:42,3:50,6:54,9:58,12:62,15:66,18:70,21:74,24:78};
+const CITIES = [
+  ['Baton Rouge',30.4515,-91.1871],['New Orleans',29.9511,-90.0715],['Gulfport',30.3674,-89.0928],['McComb',31.2446,-90.4532],['Woodville',31.1046,-91.2990],['Hammond',30.5044,-90.4612],['Bogalusa',30.7910,-89.8487],['Houma',29.5958,-90.7195]
+];
+let map, ndfdLayer, cityLayer, stateLayer, countyLayer, cwaHaloLayer, cwaLayer;
+let selectedHour = 0;
+let activeGroupId = FORECAST_GROUP_LAYER[0];
+let playTimer = null;
+
+const $ = id => document.getElementById(id);
+const cityId = name => `city-val-${name.replace(/\s+/g,'-')}`;
+const imageChild = groupId => groupId + 3;
+
+window.addEventListener('DOMContentLoaded', init);
+
+function init(){
+  map = L.map('map', {center:[30.65,-90.25], zoom:7, zoomControl:false});
+  L.control.zoom({position:'topleft'}).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'© OpenStreetMap contributors © CARTO, NOAA/NWS', maxZoom:19
+  }).addTo(map);
+
+  ndfdLayer = L.esri.dynamicMapLayer({
+    url:NDFD_URL,
+    layers:[activeGroupId, imageChild(activeGroupId)],
+    opacity:0.80,
+    useCors:false,
+    disableCache:true
+  }).addTo(map);
+
+  loadBoundaries();
+  addCityLabels();
+  wireControls();
+  syncForecast();
+  map.on('click', e => inspectPoint(e.latlng));
+}
+
+function wireControls(){
+  $('timeline-slider').addEventListener('input', e => { selectedHour = Number(e.target.value); syncForecast(); });
+  document.querySelectorAll('.ticks button').forEach(btn => btn.addEventListener('click', () => {
+    selectedHour = Number(btn.dataset.hour); $('timeline-slider').value = selectedHour; stopPlayback(); syncForecast();
+  }));
+  $('opacity-slider').addEventListener('input', e => {
+    $('opacity-readout').textContent = `${e.target.value}%`;
+    if(ndfdLayer) ndfdLayer.setOpacity(Number(e.target.value)/100);
+  });
+  $('play-btn').addEventListener('click', togglePlayback);
+  $('reset-btn').addEventListener('click', () => map.setView([30.65,-90.25],7));
+  $('search-btn').addEventListener('click', searchLocation);
+  $('search-input').addEventListener('keydown', e => { if(e.key === 'Enter') searchLocation(); });
+}
+
+function syncForecast(){
+  const step = nearestStep(selectedHour);
+  activeGroupId = FORECAST_GROUP_LAYER[step];
+  $('offset-badge').textContent = step === 0 ? 'Current' : `+${step}h`;
+  $('hours-display').textContent = step === 0 ? 'Current Forecast' : `+${step} Hour Forecast`;
+
+  const base = new Date();
+  base.setMinutes(0,0,0);
+  const target = new Date(base.getTime() + step*3600*1000);
+  const local = target.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+  const utc = target.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'UTC'});
+  $('local-time').textContent = local;
+  $('utc-time').textContent = `${utc} UTC`;
+  $('date-display').textContent = `${local} / ${utc} UTC`;
+
+  if(ndfdLayer) {
+    ndfdLayer.setLayers([activeGroupId, imageChild(activeGroupId)]);
+    ndfdLayer.bringToFront();
+  }
+  bringOverlaysToFront();
+  refreshCityValues();
+}
+
+function nearestStep(hour){
+  return Object.keys(FORECAST_GROUP_LAYER).map(Number).reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, 0);
+}
+
+async function loadBoundaries(){
+  try{
+    const [states,counties,cwa] = await Promise.all([
+      fetchJson('assets/boundaries/lix_states.geojson'),
+      fetchJson('assets/boundaries/lix_counties.geojson'),
+      fetchJson('assets/boundaries/lix_cwa.geojson')
+    ]);
+    stateLayer = L.geoJSON(states, {interactive:false, style:{color:'#ffffff',weight:1.2,opacity:.55,fillOpacity:0}}).addTo(map);
+    countyLayer = L.geoJSON(counties, {interactive:false, style:{color:'#111827',weight:1.15,opacity:.92,fillOpacity:0}}).addTo(map);
+    cwaHaloLayer = L.geoJSON(cwa, {interactive:false, style:{color:'#ffffff',weight:5,opacity:.95,fillOpacity:0}}).addTo(map);
+    cwaLayer = L.geoJSON(cwa, {interactive:false, style:{color:'#000000',weight:3,opacity:1,fillOpacity:0}}).addTo(map);
+    bringOverlaysToFront();
+  }catch(err){
+    console.error(err);
+    toast('Boundary files did not load. Check GitHub Pages asset paths.');
+  }
+}
+async function fetchJson(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`${url} ${r.status}`);
+  return r.json();
+}
+function bringOverlaysToFront(){
+  setTimeout(() => {
+    [stateLayer, countyLayer, cwaHaloLayer, cwaLayer, cityLayer].forEach(layer => { if(layer?.bringToFront) layer.bringToFront(); });
+  }, 250);
+}
+
+function addCityLabels(){
+  if(cityLayer) cityLayer.remove();
+  cityLayer = L.layerGroup().addTo(map);
+  for(const [name,lat,lng] of CITIES){
+    L.marker([lat,lng], {
+      interactive:false,
+      icon:L.divIcon({className:'city-label-marker', html:`<div class="city-label"><div class="city-name">${name}</div><div id="${cityId(name)}" class="city-value">--°F</div></div>`, iconSize:null, iconAnchor:[35,16]})
+    }).addTo(cityLayer);
+    sampleValue(name, lat, lng, v => { const el=$(cityId(name)); if(el) el.textContent = Number.isFinite(v) ? `${Math.round(v)}°F` : 'N/A'; });
+  }
+  bringOverlaysToFront();
+}
+function refreshCityValues(){ if(cityLayer) addCityLabels(); }
+
+function sampleValue(name, lat, lng, callback){
+  L.esri.identifyFeatures({url:NDFD_URL}).on(map).at(L.latLng(lat,lng)).layers(`visible:${imageChild(activeGroupId)}`).tolerance(3).run((err, fc) => {
+    if(err || !fc?.features?.length) return callback(NaN);
+    callback(extractValue(fc.features[0].properties || {}));
+  });
+}
+function extractValue(props){
+  for(const key of ['Pixel Value','value','Value','ST_TEMP','ST_APPT','temp','apparent']){
+    const v = parseFloat(props[key]);
+    if(Number.isFinite(v) && v > -100 && v < 180) return v;
+  }
+  for(const key in props){
+    const v = parseFloat(props[key]);
+    if(Number.isFinite(v) && v > -100 && v < 180) return v;
+  }
+  return NaN;
+}
+
+function inspectPoint(latlng){
+  $('inspect-empty').classList.add('hidden');
+  $('inspect-data').classList.remove('hidden');
+  $('inspect-coords').textContent = `LAT: ${latlng.lat.toFixed(4)} | LNG: ${latlng.lng.toFixed(4)}`;
+  $('inspect-value').textContent = '--';
+  $('inspect-risk').textContent = 'Consulting NDFD database...';
+  $('inspect-risk').className = 'risk neutral';
+  L.esri.identifyFeatures({url:NDFD_URL}).on(map).at(latlng).layers(`visible:${imageChild(activeGroupId)}`).tolerance(3).run((err, fc) => {
+    if(err || !fc?.features?.length) return noInspectData();
+    const val = extractValue(fc.features[0].properties || {});
+    if(!Number.isFinite(val)) return noInspectData();
+    const risk = classifyRisk(val);
+    $('inspect-value').textContent = `${val.toFixed(1)}°F`;
+    $('inspect-risk').textContent = risk.label;
+    $('inspect-risk').className = `risk ${risk.cls}`;
+    L.popup().setLatLng(latlng).setContent(`<div class="popup-meta">NDFD Apparent Temp</div><div class="popup-value">${val.toFixed(1)}°F</div><div class="popup-meta">Offset: +${selectedHour}h</div>`).openOn(map);
+  });
+}
+function noInspectData(){ $('inspect-value').textContent='N/A'; $('inspect-risk').textContent='Outside Forecast Grid'; $('inspect-risk').className='risk neutral'; }
+function classifyRisk(t){
+  if(t < 80) return {label:'No Alert / Normal Range', cls:'green-risk'};
+  if(t < 90) return {label:'NWS Caution Range', cls:'yellow-risk'};
+  if(t < 103) return {label:'NWS Extreme Caution', cls:'orange-risk'};
+  if(t < 125) return {label:'NWS HEAT DANGER', cls:'red-risk'};
+  return {label:'NWS EXTREME HEAT DANGER', cls:'purple-risk'};
+}
+
+function togglePlayback(){
+  if(playTimer){ stopPlayback(); return; }
+  $('play-btn').textContent = 'Ⅱ';
+  playTimer = setInterval(() => {
+    selectedHour = selectedHour >= 24 ? 0 : selectedHour + 3;
+    $('timeline-slider').value = selectedHour;
+    syncForecast();
+  }, 2200);
+}
+function stopPlayback(){ if(playTimer){ clearInterval(playTimer); playTimer=null; $('play-btn').textContent='▶'; } }
+
+async function searchLocation(){
+  const q = $('search-input').value.trim();
+  if(!q) return;
+  try{
+    const data = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&limit=1&q=${encodeURIComponent(q)}`).then(r=>r.json());
+    if(!data?.length) return toast('Location not found. Try city + state.');
+    const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+    map.flyTo([lat,lng],8,{duration:1.2});
+  }catch(err){ console.error(err); toast('Search failed.'); }
+}
+function toast(msg){
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg; $('toast').appendChild(t);
+  setTimeout(()=>t.remove(),4000);
+}
