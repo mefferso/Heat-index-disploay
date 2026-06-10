@@ -420,10 +420,16 @@ main{
   font-size:11px;
 }
 
-.ticks button:hover{
+.ticks button:hover,
+.ticks button.selected{
   border-color:rgba(56,189,248,.7);
   background:rgba(14,116,144,.32);
   color:#fff;
+}
+
+.ticks button.nearest{
+  border-color:rgba(251,191,36,.75);
+  color:#fde68a;
 }
 
 .opacity-control{

@@ -1,11 +1,12 @@
 const NDFD_URL = 'https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer';
-const FORECAST_APT_IMAGE_LAYER = {0:49,3:53,6:57,9:61,12:65,15:69,18:73,21:77,24:81};
+const DEFAULT_FORECAST_APT_IMAGE_LAYER = {0:49,3:53,6:57,9:61,12:65,15:69,18:73,21:77,24:81};
+let forecastAptImageLayer = {...DEFAULT_FORECAST_APT_IMAGE_LAYER};
 const CITIES = [
   ['Baton Rouge',30.4515,-91.1871],['New Orleans',29.9511,-90.0715],['Gulfport',30.3674,-89.0928],['McComb',31.2446,-90.4532],['Woodville',31.1046,-91.2990],['Hammond',30.5044,-90.4612],['Bogalusa',30.7910,-89.8487],['Houma',29.5958,-90.7195]
 ];
 let map, ndfdLayer, cityLayer, stateLayer, countyLayer, cwaHaloLayer, cwaLayer;
 let selectedHour = 0;
-let activeImageLayerId = FORECAST_APT_IMAGE_LAYER[0];
+let activeImageLayerId = forecastAptImageLayer[0];
 let playTimer = null;
 
 const $ = id => document.getElementById(id);
@@ -35,12 +36,14 @@ function init(){
   })
     .on('loading', () => setLayerStatus('loading', 'Loading NDFD apparent temperature layer…'))
     .on('load', () => {
-      setLayerStatus('ready', `NDFD apparent temperature layer loaded (${forecastLabel(nearestStep(selectedHour))}).`);
+      const step = nearestStep(selectedHour);
+      setLayerStatus('ready', `NDFD apparent temperature layer loaded (${forecastStatusLabel(step, selectedHour, step === selectedHour)}).`);
       bringOverlaysToFront();
     })
     .on('requesterror', handleNdfdLayerError)
     .addTo(map);
 
+  loadForecastLayers();
   loadBoundaries();
   addCityLabels();
   wireControls();
@@ -49,9 +52,10 @@ function init(){
 }
 
 function wireControls(){
-  $('timeline-slider').addEventListener('input', e => { selectedHour = Number(e.target.value); syncForecast(); });
+  $('timeline-slider').addEventListener('input', e => setForecastHour(Number(e.target.value)));
   document.querySelectorAll('.ticks button').forEach(btn => btn.addEventListener('click', () => {
-    selectedHour = Number(btn.dataset.hour); $('timeline-slider').value = selectedHour; stopPlayback(); syncForecast();
+    stopPlayback();
+    setForecastHour(Number(btn.dataset.hour));
   }));
   $('opacity-slider').addEventListener('input', e => {
     $('opacity-readout').textContent = `${e.target.value}%`;
@@ -63,11 +67,20 @@ function wireControls(){
   $('search-input').addEventListener('keydown', e => { if(e.key === 'Enter') searchLocation(); });
 }
 
+function setForecastHour(hour){
+  selectedHour = Number(hour);
+  $('timeline-slider').value = selectedHour;
+  syncForecast();
+}
+
 function syncForecast(){
-  const step = nearestStep(selectedHour);
-  activeImageLayerId = FORECAST_APT_IMAGE_LAYER[step];
-  $('offset-badge').textContent = step === 0 ? 'Current' : `+${step}h`;
-  $('hours-display').textContent = step === 0 ? 'Current Forecast' : `+${step} Hour Forecast`;
+  const requestedHour = selectedHour;
+  const step = nearestStep(requestedHour);
+  const exactMatch = step === requestedHour;
+  activeImageLayerId = forecastAptImageLayer[step];
+  $('offset-badge').textContent = forecastBadge(step, requestedHour, exactMatch);
+  $('hours-display').textContent = forecastTitle(step, requestedHour, exactMatch);
+  updateTickState(step, requestedHour);
 
   const base = new Date();
   base.setMinutes(0,0,0);
@@ -78,20 +91,79 @@ function syncForecast(){
   $('utc-time').textContent = `${utc} UTC`;
   $('date-display').textContent = `${local} / ${utc} UTC`;
 
-  if(ndfdLayer) {
-    setLayerStatus('loading', `Loading NDFD apparent temperature layer (${forecastLabel(step)})…`);
+  if(ndfdLayer && activeImageLayerId != null) {
+    setLayerStatus('loading', `Loading NDFD apparent temperature layer (${forecastStatusLabel(step, requestedHour, exactMatch)})…`);
     ndfdLayer.setLayers([activeImageLayerId]);
     ndfdLayer.bringToFront();
+  } else {
+    setLayerStatus('error', 'No NDFD apparent temperature layer is available for this forecast hour.');
+    console.error('No NDFD apparent temperature layer id found for forecast hour:', {requestedHour, resolvedHour:step, forecastAptImageLayer});
   }
   bringOverlaysToFront();
   refreshCityValues();
 }
 
 function nearestStep(hour){
-  return Object.keys(FORECAST_APT_IMAGE_LAYER).map(Number).reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, 0);
+  const availableHours = Object.keys(forecastAptImageLayer).map(Number);
+  return availableHours.reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, availableHours[0]);
 }
 function forecastLabel(step){
   return step === 0 ? 'current forecast' : `+${step} hour forecast`;
+}
+function forecastTitle(step, requestedHour, exactMatch){
+  if(exactMatch) return step === 0 ? 'Current Forecast' : `+${step} Hour Forecast`;
+  return `Nearest Available: +${step} Hour Forecast`;
+}
+function forecastBadge(step, requestedHour, exactMatch){
+  const label = step === 0 ? 'Current' : `+${step}h`;
+  return exactMatch ? label : `Nearest ${label}`;
+}
+function forecastStatusLabel(step, requestedHour, exactMatch){
+  if(exactMatch) return forecastLabel(step);
+  return `${forecastLabel(step)}, nearest available to +${requestedHour} hour`;
+}
+function updateTickState(step, requestedHour){
+  document.querySelectorAll('.ticks button').forEach(btn => {
+    const hour = Number(btn.dataset.hour);
+    btn.classList.toggle('selected', hour === requestedHour);
+    btn.classList.toggle('nearest', hour === step && hour !== requestedHour);
+  });
+}
+
+async function loadForecastLayers(){
+  try{
+    const metadata = await fetchJson(`${NDFD_URL}?f=pjson`);
+    const discovered = discoverApparentTemperatureImageLayers(metadata.layers || []);
+    if(Object.keys(discovered).length){
+      forecastAptImageLayer = discovered;
+      syncForecast();
+      return;
+    }
+    console.warn('No apparent temperature image layers were discovered in NDFD metadata; using fallback layer ids.', metadata);
+  }catch(err){
+    console.warn('Could not load NDFD layer metadata; using fallback apparent temperature layer ids.', err);
+  }
+  forecastAptImageLayer = {...DEFAULT_FORECAST_APT_IMAGE_LAYER};
+  syncForecast();
+}
+function discoverApparentTemperatureImageLayers(layers){
+  const byId = new Map(layers.map(layer => [layer.id, layer]));
+  return layers.reduce((acc, layer) => {
+    const directMatch = /^AptTemp_(\d{2})Hr\/Image$/i.exec(layer.name || '');
+    if(directMatch){
+      acc[Number(directMatch[1])] = layer.id;
+      return acc;
+    }
+
+    const groupMatch = /^AptTemp_(\d{2})Hr$/i.exec(layer.name || '');
+    if(!groupMatch) return acc;
+
+    const imageChild = (layer.subLayerIds || [])
+      .map(id => byId.get(id))
+      .find(child => /^Image$/i.test(child?.name || ''));
+    if(imageChild) acc[Number(groupMatch[1])] = imageChild.id;
+    return acc;
+  }, {});
 }
 
 async function loadBoundaries(){
@@ -199,8 +271,7 @@ function togglePlayback(){
   $('play-btn').textContent = 'Ⅱ';
   playTimer = setInterval(() => {
     selectedHour = selectedHour >= 24 ? 0 : selectedHour + 3;
-    $('timeline-slider').value = selectedHour;
-    syncForecast();
+    setForecastHour(selectedHour);
   }, 2200);
 }
 function stopPlayback(){ if(playTimer){ clearInterval(playTimer); playTimer=null; $('play-btn').textContent='▶'; } }
