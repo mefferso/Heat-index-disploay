@@ -5,24 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NDFD Heat Index Map - WFO LIX</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
-  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <aside id="sidebar">
-    <header class="panel-section header-block">
+  <header class="app-header">
+    <div>
       <div class="eyebrow">National Weather Service</div>
       <h1>NDFD Heat Index Map</h1>
-      <p>Apparent temperature / heat index from NOAA NDFD with WFO LIX boundaries and sampled city values.</p>
-    </header>
+    </div>
+    <p>Apparent temperature / heat index from NOAA NDFD with WFO LIX boundaries and sampled city values.</p>
+  </header>
 
+  <div class="app-shell">
+  <aside id="sidebar">
     <section class="panel-section card">
       <div class="row between">
         <h2>Active Time Frame</h2>
         <span id="offset-badge">Current</span>
       </div>
-      <div class="time-label">Local</div>
+      <div class="time-label">Local valid time</div>
       <div id="local-time" class="big-time">--</div>
-      <div class="time-label border-top">UTC</div>
+      <div class="time-label border-top">UTC valid time</div>
       <div id="utc-time" class="small-time">--</div>
     </section>
 
@@ -58,9 +61,13 @@
       <div class="legend"><span class="swatch orange"></span><b>Extreme Caution</b><span>90–102°F</span></div>
       <div class="legend"><span class="swatch yellow"></span><b>Caution</b><span>80–89°F</span></div>
       <div class="legend"><span class="swatch green"></span><b>General / Cool</b><span>&lt;80°F</span></div>
+      <div class="boundary-key" aria-label="Map boundary legend">
+        <div><span class="line-sample cwa-line"></span><b>WFO LIX CWA</b></div>
+        <div><span class="line-sample county-line"></span><b>Parish / county</b></div>
+      </div>
     </section>
 
-    <footer>Source: NOAA/NWS NDFD + WFO LIX repo boundaries</footer>
+    <footer>Source: NOAA/NWS NDFD + local WFO LIX CWA and parish/county GeoJSON boundaries</footer>
   </aside>
 
   <main>
@@ -72,6 +79,7 @@
           <div>
             <div id="hours-display" class="hours">Current Forecast</div>
             <div id="date-display" class="date-display">--</div>
+            <div id="layer-status" class="layer-status loading" role="status" aria-live="polite">Loading NDFD apparent temperature layer…</div>
           </div>
           <div class="opacity-control">
             <label for="opacity-slider">Opacity <span id="opacity-readout">80%</span></label>
@@ -87,10 +95,10 @@
     <button id="reset-btn">Reset LIX View</button>
     <div id="toast"></div>
   </main>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet/3.0.12/esri-leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
-  <script src="assets/js/app.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
