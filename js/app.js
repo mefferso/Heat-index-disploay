@@ -19,6 +19,8 @@ let selectedHour = 0;
 let activeDisplayLayerId = forecastAptLayer[0].display;
 let activeImageLayerId = forecastAptLayer[0].identify;
 let playTimer = null;
+const forecastBaseTime = new Date();
+forecastBaseTime.setMinutes(0,0,0);
 
 const $ = id => document.getElementById(id);
 const cityId = name => `city-val-${name.replace(/\s+/g,'-')}`;
@@ -65,6 +67,7 @@ function init(){
   loadBoundaries();
   addCityLabels();
   wireControls();
+  renderForecastControls();
   syncForecast();
   map.on('click', e => inspectPoint(e.latlng));
 }
@@ -74,25 +77,38 @@ function activeRasterLayers(){
 }
 
 function wireControls(){
-  $('timeline-slider').addEventListener('input', e => setForecastHour(Number(e.target.value)));
-  document.querySelectorAll('.ticks button').forEach(btn => btn.addEventListener('click', () => {
+  $('forecast-days').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-hour]');
+    if(!btn) return;
     stopPlayback();
     setForecastHour(Number(btn.dataset.hour));
-  }));
+  });
+  $('prev-frame-btn').addEventListener('click', () => { stopPlayback(); stepForecast(-1); });
+  $('next-frame-btn').addEventListener('click', () => { stopPlayback(); stepForecast(1); });
   $('opacity-slider').addEventListener('input', e => {
     $('opacity-readout').textContent = `${e.target.value}%`;
     if(ndfdLayer) ndfdLayer.setOpacity(Number(e.target.value)/100);
   });
   $('play-btn').addEventListener('click', togglePlayback);
   $('reset-btn').addEventListener('click', () => map.setView([30.65,-90.25],7));
-  $('search-btn').addEventListener('click', searchLocation);
-  $('search-input').addEventListener('keydown', e => { if(e.key === 'Enter') searchLocation(); });
 }
 
 function setForecastHour(hour){
   selectedHour = Number(hour);
-  $('timeline-slider').value = selectedHour;
   syncForecast();
+}
+
+function stepForecast(direction, wrap=false){
+  const hours = availableForecastHours();
+  const current = nearestStep(selectedHour);
+  const currentIndex = Math.max(0, hours.indexOf(current));
+  let nextIndex = currentIndex + direction;
+  if(wrap){
+    nextIndex = (nextIndex + hours.length) % hours.length;
+  } else {
+    nextIndex = Math.max(0, Math.min(hours.length - 1, nextIndex));
+  }
+  setForecastHour(hours[nextIndex]);
 }
 
 function syncForecast(){
@@ -102,18 +118,13 @@ function syncForecast(){
   const activeLayer = forecastAptLayer[step];
   activeDisplayLayerId = activeLayer?.display;
   activeImageLayerId = activeLayer?.identify;
-  $('offset-badge').textContent = forecastBadge(step, requestedHour, exactMatch);
+  const target = validTimeForHour(step);
+  const local = formatValidTime(target);
+  $('offset-badge').textContent = compactValidTime(target);
   $('hours-display').textContent = forecastTitle(step, requestedHour, exactMatch);
-  updateTickState(step, requestedHour);
-
-  const base = new Date();
-  base.setMinutes(0,0,0);
-  const target = new Date(base.getTime() + step*3600*1000);
-  const local = target.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
-  const utc = target.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'UTC'});
+  updateTimeButtonState(step);
   $('local-time').textContent = local;
-  $('utc-time').textContent = `${utc} UTC`;
-  $('date-display').textContent = `${local} / ${utc} UTC`;
+  $('date-display').textContent = local;
 
   if(ndfdLayer && activeDisplayLayerId != null && activeImageLayerId != null) {
     setLayerStatus('loading', `Loading NDFD apparent temperature layer (${forecastStatusLabel(step, requestedHour, exactMatch)})…`);
@@ -127,31 +138,81 @@ function syncForecast(){
   refreshCityValues();
 }
 
+function availableForecastHours(){
+  return Object.keys(forecastAptLayer).map(Number).sort((a,b) => a-b);
+}
 function nearestStep(hour){
-  const availableHours = Object.keys(forecastAptLayer).map(Number);
+  const availableHours = availableForecastHours();
   return availableHours.reduce((best, step) => Math.abs(step-hour) < Math.abs(best-hour) ? step : best, availableHours[0]);
 }
-function forecastLabel(step){
-  return step === 0 ? 'current forecast' : `+${step} hour forecast`;
-}
 function forecastTitle(step, requestedHour, exactMatch){
-  if(exactMatch) return step === 0 ? 'Current Forecast' : `+${step} Hour Forecast`;
-  return `Nearest Available: +${step} Hour Forecast`;
-}
-function forecastBadge(step, requestedHour, exactMatch){
-  const label = step === 0 ? 'Current' : `+${step}h`;
-  return exactMatch ? label : `Nearest ${label}`;
+  const label = compactValidTime(validTimeForHour(step));
+  return exactMatch ? `Valid ${label}` : `Nearest Available: ${label}`;
 }
 function forecastStatusLabel(step, requestedHour, exactMatch){
-  if(exactMatch) return forecastLabel(step);
-  return `${forecastLabel(step)}, nearest available to +${requestedHour} hour`;
+  const label = formatValidTime(validTimeForHour(step));
+  return exactMatch ? label : `${label}, nearest available`;
 }
-function updateTickState(step, requestedHour){
-  document.querySelectorAll('.ticks button').forEach(btn => {
-    const hour = Number(btn.dataset.hour);
-    btn.classList.toggle('selected', hour === requestedHour);
-    btn.classList.toggle('nearest', hour === step && hour !== requestedHour);
+function updateTimeButtonState(step){
+  document.querySelectorAll('.forecast-time-btn').forEach(btn => {
+    btn.classList.toggle('selected', Number(btn.dataset.hour) === step);
   });
+}
+function validTimeForHour(hour){
+  return new Date(forecastBaseTime.getTime() + hour*3600*1000);
+}
+function formatValidTime(date){
+  return date.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+}
+function compactValidTime(date){
+  const day = dayLabel(date);
+  return `${day} ${timeButtonLabel(date)}`;
+}
+function dayKey(date){
+  return date.toLocaleDateString(undefined,{year:'numeric',month:'2-digit',day:'2-digit'});
+}
+function dayLabel(date){
+  return dayKey(date) === dayKey(new Date()) ? 'Today' : date.toLocaleDateString(undefined,{weekday:'short'});
+}
+function timeButtonLabel(date){
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  if(minutes === 0 && hours === 0) return 'Midnight';
+  if(minutes === 0 && hours === 12) return 'Noon';
+  return date.toLocaleTimeString(undefined,{hour:'numeric',minute:minutes ? '2-digit' : undefined});
+}
+function renderForecastControls(){
+  const container = $('forecast-days');
+  if(!container) return;
+  container.innerHTML = '';
+  const groups = new Map();
+  for(const hour of availableForecastHours()){
+    const validTime = validTimeForHour(hour);
+    const key = dayKey(validTime);
+    if(!groups.has(key)) groups.set(key, {label:dayLabel(validTime), items:[]});
+    groups.get(key).items.push({hour, validTime});
+  }
+  for(const group of groups.values()){
+    const dayEl = document.createElement('div');
+    dayEl.className = 'forecast-day-group';
+    const header = document.createElement('div');
+    header.className = 'forecast-day-label';
+    header.textContent = group.label;
+    const times = document.createElement('div');
+    times.className = 'forecast-time-row';
+    for(const item of group.items){
+      const btn = document.createElement('button');
+      btn.className = 'forecast-time-btn';
+      btn.type = 'button';
+      btn.dataset.hour = String(item.hour);
+      btn.title = formatValidTime(item.validTime);
+      btn.textContent = timeButtonLabel(item.validTime);
+      times.appendChild(btn);
+    }
+    dayEl.append(header, times);
+    container.appendChild(dayEl);
+  }
+  updateTimeButtonState(nearestStep(selectedHour));
 }
 
 async function loadForecastLayers(){
@@ -160,6 +221,7 @@ async function loadForecastLayers(){
     const discovered = discoverApparentTemperatureImageLayers(metadata.layers || []);
     if(Object.keys(discovered).length){
       forecastAptLayer = discovered;
+      renderForecastControls();
       syncForecast();
       return;
     }
@@ -168,6 +230,7 @@ async function loadForecastLayers(){
     console.warn('Could not load NDFD layer metadata; using fallback apparent temperature layer ids.', err);
   }
   forecastAptLayer = {...DEFAULT_FORECAST_APT_LAYER};
+  renderForecastControls();
   syncForecast();
 }
 function discoverApparentTemperatureImageLayers(layers){
@@ -290,7 +353,7 @@ function inspectPoint(latlng){
     $('inspect-value').textContent = `${val.toFixed(1)}°F`;
     $('inspect-risk').textContent = risk.label;
     $('inspect-risk').className = `risk ${risk.cls}`;
-    L.popup().setLatLng(latlng).setContent(`<div class="popup-meta">NDFD Apparent Temp</div><div class="popup-value">${val.toFixed(1)}°F</div><div class="popup-meta">Offset: +${selectedHour}h</div>`).openOn(map);
+    L.popup().setLatLng(latlng).setContent(`<div class="popup-meta">NDFD Apparent Temp</div><div class="popup-value">${val.toFixed(1)}°F</div><div class="popup-meta">Valid: ${formatValidTime(validTimeForHour(nearestStep(selectedHour)))}</div>`).openOn(map);
   });
 }
 function noInspectData(){ $('inspect-value').textContent='N/A'; $('inspect-risk').textContent='Outside Forecast Grid'; $('inspect-risk').className='risk neutral'; }
@@ -305,23 +368,10 @@ function classifyRisk(t){
 function togglePlayback(){
   if(playTimer){ stopPlayback(); return; }
   $('play-btn').textContent = 'Ⅱ';
-  playTimer = setInterval(() => {
-    selectedHour = selectedHour >= 24 ? 0 : selectedHour + 3;
-    setForecastHour(selectedHour);
-  }, 2200);
+  playTimer = setInterval(() => stepForecast(1, true), 2200);
 }
 function stopPlayback(){ if(playTimer){ clearInterval(playTimer); playTimer=null; $('play-btn').textContent='▶'; } }
 
-async function searchLocation(){
-  const q = $('search-input').value.trim();
-  if(!q) return;
-  try{
-    const data = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&limit=1&q=${encodeURIComponent(q)}`).then(r=>r.json());
-    if(!data?.length) return toast('Location not found. Try city + state.');
-    const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
-    map.flyTo([lat,lng],8,{duration:1.2});
-  }catch(err){ console.error(err); toast('Search failed.'); }
-}
 function toast(msg){
   const t=document.createElement('div'); t.className='toast'; t.textContent=msg; $('toast').appendChild(t);
   setTimeout(()=>t.remove(),4000);

@@ -25,16 +25,6 @@
       </div>
       <div class="time-label">Local valid time</div>
       <div id="local-time" class="big-time">--</div>
-      <div class="time-label border-top">UTC valid time</div>
-      <div id="utc-time" class="small-time">--</div>
-    </section>
-
-    <section class="panel-section">
-      <label for="search-input" class="label">Location Search</label>
-      <div class="search-row">
-        <input id="search-input" type="text" placeholder="City, State..." />
-        <button id="search-btn">Find</button>
-      </div>
     </section>
 
     <section class="panel-section card">
@@ -53,19 +43,6 @@
       </div>
     </section>
 
-    <section class="panel-section">
-      <h2>NWS Heat Index Safety Scale</h2>
-      <div class="gradient"></div>
-      <div class="legend"><span class="swatch purple"></span><b>Extreme Danger</b><span>125°F+</span></div>
-      <div class="legend"><span class="swatch red"></span><b>Danger</b><span>103–124°F</span></div>
-      <div class="legend"><span class="swatch orange"></span><b>Extreme Caution</b><span>90–102°F</span></div>
-      <div class="legend"><span class="swatch yellow"></span><b>Caution</b><span>80–89°F</span></div>
-      <div class="legend"><span class="swatch green"></span><b>General / Cool</b><span>&lt;80°F</span></div>
-      <div class="boundary-key" aria-label="Map boundary legend">
-        <div><span class="line-sample cwa-line"></span><b>WFO LIX CWA</b></div>
-        <div><span class="line-sample county-line"></span><b>Parish / county</b></div>
-      </div>
-    </section>
 
     <footer>Source: NOAA/NWS NDFD + local WFO LIX CWA and parish/county GeoJSON boundaries</footer>
   </aside>
@@ -73,7 +50,11 @@
   <main>
     <div id="map"></div>
     <div id="controls">
-      <button id="play-btn" title="Play forecast loop">▶</button>
+      <div class="frame-controls" aria-label="Forecast frame controls">
+        <button id="prev-frame-btn" class="frame-btn" title="Previous forecast frame" aria-label="Previous forecast frame">‹</button>
+        <button id="play-btn" class="frame-btn play-frame" title="Play forecast loop" aria-label="Play forecast loop">▶</button>
+        <button id="next-frame-btn" class="frame-btn" title="Next forecast frame" aria-label="Next forecast frame">›</button>
+      </div>
       <div class="slider-wrap">
         <div class="row between">
           <div>
@@ -86,10 +67,7 @@
             <input id="opacity-slider" type="range" min="20" max="100" value="80" />
           </div>
         </div>
-        <input id="timeline-slider" type="range" min="0" max="24" step="3" value="0" />
-        <div class="ticks">
-          <button data-hour="0">0h</button><button data-hour="3">+3h</button><button data-hour="6">+6h</button><button data-hour="9">+9h</button><button data-hour="12">+12h</button><button data-hour="15">+15h</button><button data-hour="18">+18h</button><button data-hour="21">+21h</button><button data-hour="24">+24h</button>
-        </div>
+        <div id="forecast-days" class="forecast-days" aria-label="Forecast valid times"></div>
       </div>
     </div>
     <button id="reset-btn">Reset LIX View</button>
