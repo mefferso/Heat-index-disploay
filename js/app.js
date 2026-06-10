@@ -73,8 +73,7 @@ function init(){
 }
 
 function activeRasterLayers(){
-  // Render the parent AptTemp mosaic layer only. The Image child is for identify/city sampling.
-  return activeDisplayLayerId == null ? [] : [activeDisplayLayerId];
+  return [activeDisplayLayerId, activeImageLayerId].filter(id => id != null);
 }
 
 function wireControls(){
