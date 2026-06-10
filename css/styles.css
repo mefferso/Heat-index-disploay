@@ -353,6 +353,49 @@ main{
   font-size:12px;
 }
 
+.layer-status{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  margin-top:8px;
+  padding:6px 9px;
+  border:1px solid rgba(148,163,184,.22);
+  border-radius:999px;
+  background:rgba(2,6,23,.34);
+  color:#cbd5e1;
+  font-size:11px;
+  font-weight:850;
+}
+
+.layer-status::before{
+  content:'';
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:#94a3b8;
+  box-shadow:0 0 0 3px rgba(148,163,184,.12);
+}
+
+.layer-status.loading::before{
+  background:#38bdf8;
+  box-shadow:0 0 0 3px rgba(56,189,248,.16);
+}
+
+.layer-status.ready::before{
+  background:#22c55e;
+  box-shadow:0 0 0 3px rgba(34,197,94,.14);
+}
+
+.layer-status.error{
+  border-color:rgba(248,113,113,.45);
+  color:#fecaca;
+}
+
+.layer-status.error::before{
+  background:#ef4444;
+  box-shadow:0 0 0 3px rgba(239,68,68,.18);
+}
+
 #timeline-slider,
 .opacity-control input{
   width:100%;
