@@ -81,9 +81,9 @@ function nearestStep(hour){
 async function loadBoundaries(){
   try{
     const [states,counties,cwa] = await Promise.all([
-      fetchGzJson('assets/boundaries/lix_states.geojson.gz'),
-      fetchGzJson('assets/boundaries/lix_counties.geojson.gz'),
-      fetchGzJson('assets/boundaries/lix_cwa.geojson.gz')
+      fetchJson('assets/boundaries/lix_states.geojson'),
+      fetchJson('assets/boundaries/lix_counties.geojson'),
+      fetchJson('assets/boundaries/lix_cwa.geojson')
     ]);
     stateLayer = L.geoJSON(states, {interactive:false, style:{color:'#ffffff',weight:1.2,opacity:.55,fillOpacity:0}}).addTo(map);
     countyLayer = L.geoJSON(counties, {interactive:false, style:{color:'#111827',weight:1.15,opacity:.92,fillOpacity:0}}).addTo(map);
@@ -95,18 +95,10 @@ async function loadBoundaries(){
     toast('Boundary files did not load. Check GitHub Pages asset paths.');
   }
 }
-async function fetchGzJson(url){
+async function fetchJson(url){
   const r = await fetch(url);
   if(!r.ok) throw new Error(`${url} ${r.status}`);
-  const buf = new Uint8Array(await r.arrayBuffer());
-  let txt;
-  try {
-    txt = new TextDecoder().decode(fflate.gunzipSync(buf));
-  } catch (err) {
-    // Some static hosts may auto-decompress .gz files. If that happens, parse the body directly.
-    txt = new TextDecoder().decode(buf);
-  }
-  return JSON.parse(txt);
+  return r.json();
 }
 function bringOverlaysToFront(){
   setTimeout(() => {
