@@ -1,14 +1,20 @@
 const NDFD_URL = 'https://mapservices.weather.noaa.gov/raster/rest/services/NDFD/NDFD_temp/MapServer';
+
+// NDFD apparent-temp groups are forecast-hour containers. The actual colored raster
+// that ArcGIS exports is the child layer named "Image", so both display and identify
+// should point at that Image child. Asking the export request to draw both the group
+// layer and the Image child can return a blank/transparent image even though Identify
+// still returns valid grid values.
 const DEFAULT_FORECAST_APT_LAYER = {
-  0:{display:46, identify:49},
-  3:{display:50, identify:53},
-  6:{display:54, identify:57},
-  9:{display:58, identify:61},
-  12:{display:62, identify:65},
-  15:{display:66, identify:69},
-  18:{display:70, identify:73},
-  21:{display:74, identify:77},
-  24:{display:78, identify:81}
+  0:{display:49, identify:49},
+  3:{display:53, identify:53},
+  6:{display:57, identify:57},
+  9:{display:61, identify:61},
+  12:{display:65, identify:65},
+  15:{display:69, identify:69},
+  18:{display:73, identify:73},
+  21:{display:77, identify:77},
+  24:{display:81, identify:81}
 };
 let forecastAptLayer = {...DEFAULT_FORECAST_APT_LAYER};
 const CITIES = [
@@ -73,7 +79,7 @@ function init(){
 }
 
 function activeRasterLayers(){
-  return [activeDisplayLayerId, activeImageLayerId].filter(id => id != null);
+  return [activeDisplayLayerId].filter(id => id != null);
 }
 
 function wireControls(){
@@ -250,7 +256,7 @@ function discoverApparentTemperatureImageLayers(layers){
       .map(id => byId.get(id))
       .find(child => /^Image$/i.test(child?.name || ''));
     if(imageChild){
-      acc[Number(groupMatch[1])] = {display:layer.id, identify:imageChild.id};
+      acc[Number(groupMatch[1])] = {display:imageChild.id, identify:imageChild.id};
     }
     return acc;
   }, {});
