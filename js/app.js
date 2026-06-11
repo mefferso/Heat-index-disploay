@@ -11,7 +11,14 @@ const DEFAULT_DAILY_MAX_LAYER = {
 };
 let dailyMaxLayer = {...DEFAULT_DAILY_MAX_LAYER};
 const CITIES = [
-  ['Baton Rouge',30.4515,-91.1871],['New Orleans',29.9511,-90.0715],['Gulfport',30.3674,-89.0928],['McComb',31.2446,-90.4532],['Woodville',31.1046,-91.2990],['Hammond',30.5044,-90.4612],['Bogalusa',30.7910,-89.8487],['Houma',29.5958,-90.7195]
+  ['Baton Rouge', 30.5332, -91.1496], // KBTR
+  ['New Orleans', 29.9934, -90.2580], // KMSY, not KNEW
+  ['Gulfport',    30.4073, -89.0701], // KGPT
+  ['McComb',      31.1785, -90.4719], // KMCB
+  ['Woodville',   31.1046, -91.2990], // keep existing point
+  ['Hammond',     30.5217, -90.4183], // KHDC
+  ['Bogalusa',    30.8137, -89.8650], // KBXA
+  ['Houma',       29.5665, -90.6604]  // KHUM
 ];
 let map, ndfdLayer, cityLayer, stateLayer, countyLayer, cwaHaloLayer, cwaLayer;
 let selectedDay = 1;
