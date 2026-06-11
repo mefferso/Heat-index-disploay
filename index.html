@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NDFD Heat Index Map - WFO LIX</title>
+  <title>NDFD Daily Max Map - WFO LIX</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -11,19 +11,19 @@
   <header class="app-header">
     <div>
       <div class="eyebrow">National Weather Service</div>
-      <h1>NDFD Heat Index Map</h1>
+      <h1>NDFD Daily Max Map</h1>
     </div>
-    <p>Apparent temperature / heat index from NOAA NDFD with WFO LIX boundaries and sampled city values.</p>
+    <p>Daily maximum NDFD forecast layer with WFO LIX boundaries and sampled city values.</p>
   </header>
 
   <div class="app-shell">
   <aside id="sidebar">
     <section class="panel-section card">
       <div class="row between">
-        <h2>Active Time Frame</h2>
+        <h2>Active Forecast Day</h2>
         <span id="offset-badge">Current</span>
       </div>
-      <div class="time-label">Local valid time</div>
+      <div class="time-label">Valid day</div>
       <div id="local-time" class="big-time">--</div>
     </section>
 
@@ -50,23 +50,23 @@
   <main>
     <div id="map"></div>
     <div id="controls">
-      <div class="frame-controls" aria-label="Forecast frame controls">
-        <button id="prev-frame-btn" class="frame-btn" title="Previous forecast frame" aria-label="Previous forecast frame">‹</button>
-        <button id="play-btn" class="frame-btn play-frame" title="Play forecast loop" aria-label="Play forecast loop">▶</button>
-        <button id="next-frame-btn" class="frame-btn" title="Next forecast frame" aria-label="Next forecast frame">›</button>
+      <div class="frame-controls" aria-label="Forecast day controls">
+        <button id="prev-frame-btn" class="frame-btn" title="Previous forecast day" aria-label="Previous forecast day">‹</button>
+        <button id="play-btn" class="frame-btn play-frame" title="Play forecast day loop" aria-label="Play forecast day loop">▶</button>
+        <button id="next-frame-btn" class="frame-btn" title="Next forecast day" aria-label="Next forecast day">›</button>
       </div>
       <div class="slider-wrap">
         <div class="row between">
           <div>
-            <div id="hours-display" class="hours">Current Forecast</div>
-            <div id="layer-status" class="layer-status loading" role="status" aria-live="polite">Loading NDFD apparent temperature layer…</div>
+            <div id="hours-display" class="hours">Daily Max Forecast</div>
+            <div id="layer-status" class="layer-status loading" role="status" aria-live="polite">Loading daily max layer...</div>
           </div>
           <div class="opacity-control">
             <label for="opacity-slider">Opacity <span id="opacity-readout">80%</span></label>
             <input id="opacity-slider" type="range" min="20" max="100" value="80" />
           </div>
         </div>
-        <div id="forecast-days" class="forecast-days" aria-label="Forecast valid times"></div>
+        <div id="forecast-days" class="forecast-days" aria-label="Forecast days"></div>
       </div>
     </div>
     <div id="toast"></div>
